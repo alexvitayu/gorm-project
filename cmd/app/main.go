@@ -63,10 +63,27 @@ func main() {
 	//
 	//log.Printf("пользователь загружен: %s <%s>", user.Name, user.Email)
 
-	var movie models.Movie
-	if err = db.First(&movie).Error; err != nil {
+	// Выбираем первый фильм из таблицы movies
+	//var movie models.Movie
+	//if err = db.First(&movie).Error; err != nil {
+	//	log.Fatalf("ошибка чтения: %v", err)
+	//}
+	//
+	//log.Printf("фильм загружен: %s <%s>", movie.Title, movie.Genre)
+	//
+	//// Добавляем новое поле rating в таблицу movies
+	//if err = db.AutoMigrate(&models.Movie{}); err != nil {
+	//	log.Fatalf("ошибка миграции: %v", err)
+	//}
+	//
+	//log.Println("Миграция прошла успешно!")
+
+	// прочитаем фильм из таблицы movies где id=6
+	var newMovie models.Movie
+	id := 6
+	if err = db.First(&newMovie, id).Error; err != nil {
 		log.Fatalf("ошибка чтения: %v", err)
 	}
+	log.Printf("фильм загружен: %s <%s>", newMovie.Title, newMovie.Rating)
 
-	log.Printf("фильм загружен: %s <%s>", movie.Title, movie.Genre)
 }
