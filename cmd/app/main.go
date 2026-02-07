@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/alexvitayu/gorm-project/internal/models"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -55,10 +56,17 @@ func main() {
 	//	log.Fatalf("ошибка вставки: %v", err)
 	//}
 
-	var user User
-	if err := db.First(&user).Error; err != nil {
+	//var user User
+	//if err := db.First(&user).Error; err != nil {
+	//	log.Fatalf("ошибка чтения: %v", err)
+	//}
+	//
+	//log.Printf("пользователь загружен: %s <%s>", user.Name, user.Email)
+
+	var movie models.Movie
+	if err = db.First(&movie).Error; err != nil {
 		log.Fatalf("ошибка чтения: %v", err)
 	}
 
-	log.Printf("пользователь загружен: %s <%s>", user.Name, user.Email)
+	log.Printf("фильм загружен: %s <%s>", movie.Title, movie.Genre)
 }
