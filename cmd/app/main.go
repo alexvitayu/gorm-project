@@ -15,9 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
+var orderMapping = map[string]string{
+	"rating_asc":    "rating ASC",
+	"rating_desc":   "rating DESC",
+	"released_asc":  "released_at ASC",
+	"released_desc": "released_at DESC",
+}
+
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("usage: movies <list|create|show|update|delete> [args]")
+		log.Fatal("usage: movies <list|create|show|update|delete|unrated> [args]")
 	}
 
 	cfg := config.Load()
@@ -35,7 +42,7 @@ func main() {
 
 	switch action {
 	case "list":
-		handleList(db)
+		handleList(db, os.Args)
 	case "create":
 		handleCreate(db, os.Args)
 	case "show":
@@ -44,17 +51,31 @@ func main() {
 		handleUpdate(db, os.Args)
 	case "delete":
 		handleDelete(db, os.Args)
+	case "unrated":
+		handleUnrated(db)
 	default:
 		log.Fatal("unknown action")
 	}
 }
 
-func handleList(db *gorm.DB) {
+func handleList(db *gorm.DB, args []string) {
+	tx := db.Model(&models.Movie{})
+
+	orderClause, ok := orderMapping[args[3]]
+	if !ok {
+		orderClause = orderMapping["released_asc"]
+	}
+
+	tx.Order(orderClause)
+
 	var movies []models.Movie
-	if err := db.Find(&movies).Error; err != nil {
+	if err := tx.Find(&movies).Error; err != nil {
 		log.Printf("no movies found: %v", err)
 	}
 	log.Printf("movies: %d", len(movies))
+	for _, m := range movies {
+		log.Printf("\n\rtitle = %s\n\rrating = %v\n\rreleased = %v\n\r", m.Title, m.Rating, m.ReleasedAt)
+	}
 }
 
 func handleCreate(db *gorm.DB, args []string) {
@@ -77,7 +98,7 @@ func handleCreate(db *gorm.DB, args []string) {
 		Genre:       args[4],
 		ReleasedAt:  t,
 		Description: args[6],
-		Rating:      r,
+		Rating:      &r,
 	}
 	if err = db.Create(&movie).Error; err != nil {
 		log.Fatalf("fail to creare movie: %v", err)
@@ -132,4 +153,21 @@ func handleDelete(db *gorm.DB, args []string) {
 	}
 	log.Println("movie deleted")
 	log.Printf("rows_affected = %v\n", res.RowsAffected)
+}
+
+func handleUnrated(db *gorm.DB) {
+
+	tx := db.Model(&models.Movie{})
+
+	tx.Where("rating IS NULL")
+
+	var movies []models.Movie
+	if err := tx.Find(&movies).Error; err != nil {
+		log.Printf("fail to find movies: %v", err)
+	}
+	log.Printf("found movies: %v", len(movies))
+
+	for _, m := range movies {
+		log.Printf("Title = %s\n", m.Title)
+	}
 }

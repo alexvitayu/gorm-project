@@ -1,8 +1,9 @@
 package models
 
 import (
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type Movie struct {
@@ -11,5 +12,5 @@ type Movie struct {
 	Genre       string
 	ReleasedAt  time.Time
 	Description string
-	Rating      decimal.Decimal `gorm:"type:numeric(3,1)"`
+	Rating      *decimal.Decimal `gorm:"type:numeric(3,1)"`
 }
