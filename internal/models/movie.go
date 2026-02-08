@@ -20,4 +20,7 @@ type Movie struct {
 
 	// Связь many2many с Actor
 	Actors []Actor `gorm:"many2many:movie_actors"`
+
+	Reviews      []Review `gorm:"foreignKey:MovieID"` // has many: у фильма много отзывов
+	ReviewsCount int
 }

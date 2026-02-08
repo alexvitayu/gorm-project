@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/alexvitayu/gorm-project/internal/models"
@@ -26,13 +28,19 @@ func HandleList(db *gorm.DB, args []string) {
 
 	tx.Order(orderClause)
 
+	tx.Preload("Director")
+
 	var movies []models.Movie
 	if err := tx.Find(&movies).Error; err != nil {
 		log.Printf("no movies found: %v", err)
 	}
 	log.Printf("movies: %d", len(movies))
 	for _, m := range movies {
-		log.Printf("\n\rtitle = %s\n\rrating = %v\n\rreleased = %v\n\r", m.Title, m.Rating, m.ReleasedAt)
+		var director string
+		if m.Director.ID != 0 {
+			director = m.Director.Name
+		}
+		log.Printf("\n\rtitle = %s\n\rrating = %v\n\rreleased = %v\n\rdirector = %v\n\r", m.Title, m.Rating, m.ReleasedAt, director)
 	}
 }
 
@@ -138,5 +146,50 @@ func HandleUnrated(db *gorm.DB) {
 
 	for _, m := range movies {
 		log.Printf("Title = %s\n", m.Title)
+	}
+}
+
+func HandleAddReview(db *gorm.DB, args []string) {
+	if len(args) < 6 {
+		log.Fatal("usage: movies add_review <movie_id> <score> <text>")
+	}
+
+	movieID, err := strconv.ParseUint(args[3], 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	score, err := strconv.Atoi(args[4])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	text := args[5]
+
+	if err = db.Transaction(func(tx *gorm.DB) error {
+		review := models.Review{
+			MovieID: uint(movieID),
+			Text:    text,
+			Score:   score,
+		}
+
+		if err := tx.Create(&review).Error; err != nil {
+			return fmt.Errorf("fail to create review: %w", err)
+		}
+
+		// Атомарно обновляем счетчик, используем gorm.Expr
+		res := tx.Model(&models.Movie{}).
+			Where("id = ?", movieID).
+			Update("reviews_count", gorm.Expr("reviews_count + 1"))
+		if res.Error != nil {
+			return fmt.Errorf("fail to update reviews count: %w", err)
+		}
+
+		//panic("a special panic just to check transaction")
+
+		// всё прошло без ошибок — транзакция закоммитится
+		return nil
+	}); err != nil {
+		log.Println("rollback transaction:", err)
 	}
 }
