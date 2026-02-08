@@ -1,89 +1,135 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"encoding/csv"
+
+	"github.com/alexvitayu/gorm-project/internal/config"
+	"github.com/alexvitayu/gorm-project/internal/db"
 	"github.com/alexvitayu/gorm-project/internal/models"
-	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
-type User struct {
-	ID    uint
-	Name  string
-	Email string
+func main() {
+	if len(os.Args) < 3 {
+		log.Fatal("usage: movies <list|create|show|update|delete> [args]")
+	}
+
+	cfg := config.Load()
+
+	db, err := db.Open(*cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	entity := os.Args[1]
+	action := os.Args[2]
+	if entity != "movies" {
+		log.Fatal("only movies supported")
+	}
+
+	switch action {
+	case "list":
+		handleList(db)
+	case "create":
+		handleCreate(db, os.Args)
+	case "show":
+		handleShow(db, os.Args)
+	case "update":
+		handleUpdate(db, os.Args)
+	case "delete":
+		handleDelete(db, os.Args)
+	default:
+		log.Fatal("unknown action")
+	}
 }
 
-func main() {
-	newLogger := logger.New(
-		log.New(log.Writer(), "\r\n", log.LstdFlags),
-		logger.Config{
-			SlowThreshold: time.Second,
-			LogLevel:      logger.Info,
-			Colorful:      true,
-		},
-	)
+func handleList(db *gorm.DB) {
+	var movies []models.Movie
+	if err := db.Find(&movies).Error; err != nil {
+		log.Printf("no movies found: %v", err)
+	}
+	log.Printf("movies: %d", len(movies))
+}
 
-	if err := godotenv.Load(".env.development"); err != nil {
-		log.Fatalf("переменные окружения не загружены: %v", err)
+func handleCreate(db *gorm.DB, args []string) {
+	if len(args) < 7 {
+		log.Fatal("usage: movies create <title> <genre> <released_at> <description> <rating>")
 	}
 
-	dsn := os.Getenv("DATABASE_URL")
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: newLogger,
-	})
+	layout := "2006-01-02"
+	t, err := time.Parse(layout, args[5])
 	if err != nil {
-		log.Fatalf("ошибка подключения: %v", err)
+		log.Fatalf("fail to convert to time: %v", err)
 	}
-
-	sqlDB, err := db.DB()
+	r, err := decimal.NewFromString(args[7])
 	if err != nil {
-		log.Fatalf("ошибка доступа к пулу: %v", err)
+		log.Fatalf("fail to convert to decimal: %v", err)
 	}
 
-	if err := sqlDB.Ping(); err != nil {
-		log.Fatalf("ошибка пинга базы: %v", err)
+	movie := models.Movie{
+		Title:       args[3],
+		Genre:       args[4],
+		ReleasedAt:  t,
+		Description: args[6],
+		Rating:      r,
+	}
+	if err = db.Create(&movie).Error; err != nil {
+		log.Fatalf("fail to creare movie: %v", err)
+	}
+	log.Printf("created movie with id = %d", movie.ID)
+}
+
+func handleShow(db *gorm.DB, args []string) {
+	var movie models.Movie
+	if err := db.First(&movie, args[3]).Error; err != nil {
+		log.Fatalf("fail to show movie: %v", err)
+	}
+	log.Printf("movie_title=%v", movie.Title)
+
+	writer := csv.NewWriter(os.Stdout)
+	defer writer.Flush()
+
+	if err := writer.Write([]string{"id", "title", "genre", "released_at", "description", "rating"}); err != nil {
+		log.Fatalf("fail to write header: %v", err)
 	}
 
-	log.Println("Пинг базы данных прошёл успешно!")
-
-	//if err := db.Create(&User{Name: "Анна", Email: "anna@example.com"}).Error; err != nil {
-	//	log.Fatalf("ошибка вставки: %v", err)
-	//}
-
-	//var user User
-	//if err := db.First(&user).Error; err != nil {
-	//	log.Fatalf("ошибка чтения: %v", err)
-	//}
-	//
-	//log.Printf("пользователь загружен: %s <%s>", user.Name, user.Email)
-
-	// Выбираем первый фильм из таблицы movies
-	//var movie models.Movie
-	//if err = db.First(&movie).Error; err != nil {
-	//	log.Fatalf("ошибка чтения: %v", err)
-	//}
-	//
-	//log.Printf("фильм загружен: %s <%s>", movie.Title, movie.Genre)
-	//
-	//// Добавляем новое поле rating в таблицу movies
-	//if err = db.AutoMigrate(&models.Movie{}); err != nil {
-	//	log.Fatalf("ошибка миграции: %v", err)
-	//}
-	//
-	//log.Println("Миграция прошла успешно!")
-
-	// прочитаем фильм из таблицы movies где id=6
-	var newMovie models.Movie
-	id := 6
-	if err = db.First(&newMovie, id).Error; err != nil {
-		log.Fatalf("ошибка чтения: %v", err)
+	record := []string{
+		fmt.Sprint(movie.ID),
+		movie.Title,
+		movie.Genre,
+		fmt.Sprint(movie.ReleasedAt),
+		movie.Description,
+		fmt.Sprint(movie.Rating),
 	}
-	log.Printf("фильм загружен: %s <%s>", newMovie.Title, newMovie.Rating)
 
+	if err := writer.Write(record); err != nil {
+		log.Fatalf("fail to write body: %v", err)
+	}
+}
+
+func handleUpdate(db *gorm.DB, args []string) {
+	if len(args) < 6 {
+		log.Fatal("usage: movies update <id> <field> <value>")
+	}
+	if err := db.Model(&models.Movie{}).
+		Where("id = ?", args[3]).
+		Update(args[4], args[5]).Error; err != nil {
+		log.Fatal(err)
+	}
+	log.Println("movie updated")
+}
+
+func handleDelete(db *gorm.DB, args []string) {
+	res := db.Delete(&models.Movie{}, args[3])
+	if res.Error != nil {
+		log.Fatal("fail to delete movie")
+	}
+	log.Println("movie deleted")
+	log.Printf("rows_affected = %v\n", res.RowsAffected)
 }
