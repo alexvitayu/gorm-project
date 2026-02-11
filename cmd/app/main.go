@@ -11,7 +11,7 @@ import (
 
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("usage: movies <list|create|show|update|delete|unrated|add_review> [args]")
+		log.Fatal("usage: movies <list|create|show|update|delete|unrated|add_review|rating> [args]")
 	}
 
 	cfg := config.Load()
@@ -46,6 +46,8 @@ func main() {
 		app.HandleUnrated(conn)
 	case "add_review":
 		app.HandleAddReview(conn, os.Args)
+	case "rating":
+		app.HandleShowRating(conn)
 	default:
 		log.Fatal("unknown action")
 	}

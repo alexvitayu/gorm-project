@@ -11,6 +11,12 @@ import (
 	"gorm.io/gorm"
 )
 
+type MovieRatingDTO struct {
+	Title        string
+	Rating       float64
+	ReviewsCount int64
+}
+
 var orderMapping = map[string]string{
 	"rating_asc":    "rating ASC",
 	"rating_desc":   "rating DESC",
@@ -191,5 +197,25 @@ func HandleAddReview(db *gorm.DB, args []string) {
 		return nil
 	}); err != nil {
 		log.Println("rollback transaction:", err)
+	}
+}
+
+func HandleShowRating(db *gorm.DB) {
+	var rating []MovieRatingDTO
+
+	res := db.Raw(`SELECT
+	m.title,
+	AVG(r.score) AS rating,
+	COUNT(r.id) AS reviews_count
+	FROM movies m
+	LEFT JOIN reviews r ON r.movie_id = m.id
+	GROUP BY m.id, m.title
+	ORDER BY rating DESC NULLS LAST, m.title;`).Scan(&rating)
+	if res.Error != nil {
+		log.Println(res.Error)
+		return
+	}
+	for _, m := range rating {
+		log.Printf("<Title = %v> <Rating = %v> <Reviews_count = %v>\n", m.Title, m.Rating, m.ReviewsCount)
 	}
 }
